@@ -2,7 +2,7 @@
 
 use std::ops::Bound;
 use std::path::Path;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 
 use anyhow::Result;
@@ -98,8 +98,17 @@ impl MemTable {
     }
 
     /// Get an iterator over a range of keys.
-    pub fn scan(&self, _lower: Bound<&[u8]>, _upper: Bound<&[u8]>) -> MemTableIterator {
-        unimplemented!()
+    pub fn scan(&self, lower: Bound<&[u8]>, upper: Bound<&[u8]>) -> MemTableIterator {
+        let lower = lower.map(Bytes::copy_from_slice);
+        let upper = upper.map(Bytes::copy_from_slice);
+        let mut mem_iter = MemTableIteratorBuilder {
+            map: self.map.clone(),
+            iter_builder: |map| map.range((lower, upper)),
+            item: (Bytes::from_static(&[]), Bytes::from_static(&[])),
+        }
+        .build();
+        let _ = mem_iter.next();
+        mem_iter
     }
 
     /// Flush the mem-table to SSTable. Implement in week 1 day 6.
@@ -145,18 +154,27 @@ impl StorageIterator for MemTableIterator {
     type KeyType<'a> = KeySlice<'a>;
 
     fn value(&self) -> &[u8] {
-        unimplemented!()
+        self.borrow_item().1.as_ref()
     }
 
     fn key(&self) -> KeySlice {
-        unimplemented!()
+        KeySlice::from_slice(self.borrow_item().0.as_ref())
     }
 
     fn is_valid(&self) -> bool {
-        unimplemented!()
+        !self.borrow_item().0.is_empty()
     }
 
     fn next(&mut self) -> Result<()> {
-        unimplemented!()
+        let tuple = self.with_iter_mut(|iter| {
+            iter
+                // .filter(|entry| !entry.value().is_empty())
+                .map(|entry| (entry.key().clone(), entry.value().clone()))
+                .next()
+                .unwrap_or((Bytes::from_static(&[]), Bytes::from_static(&[])))
+        });
+
+        self.with_item_mut(|item| *item = tuple);
+        Ok(())
     }
 }

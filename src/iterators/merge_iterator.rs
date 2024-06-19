@@ -1,6 +1,7 @@
 #![allow(unused_variables)] // TODO(you): remove this lint after implementing this mod
 #![allow(dead_code)] // TODO(you): remove this lint after implementing this mod
 
+use std::borrow::BorrowMut;
 use std::cmp::{self};
 use std::collections::BinaryHeap;
 
@@ -47,7 +48,19 @@ pub struct MergeIterator<I: StorageIterator> {
 
 impl<I: StorageIterator> MergeIterator<I> {
     pub fn create(iters: Vec<Box<I>>) -> Self {
-        unimplemented!()
+        // dbg!(&iters);
+        let mut binary_heap = BinaryHeap::new();
+        for (id, iter) in iters.into_iter().enumerate() {
+            dbg!(id);
+            if iter.is_valid() {
+                binary_heap.push(HeapWrapper(id, iter))
+            }
+        }
+        let current = binary_heap.pop();
+        MergeIterator {
+            iters: binary_heap,
+            current,
+        }
     }
 }
 
@@ -57,18 +70,51 @@ impl<I: 'static + for<'a> StorageIterator<KeyType<'a> = KeySlice<'a>>> StorageIt
     type KeyType<'a> = KeySlice<'a>;
 
     fn key(&self) -> KeySlice {
-        unimplemented!()
+        match &self.current {
+            Some(cur) => cur.1.key(),
+            None => KeySlice::from_slice([].as_ref()),
+        }
     }
 
     fn value(&self) -> &[u8] {
-        unimplemented!()
+        match &self.current {
+            Some(cur) => cur.1.value(),
+            None => [].as_ref(),
+        }
     }
 
     fn is_valid(&self) -> bool {
-        unimplemented!()
+        !(self.iters.is_empty() & self.current.is_none())
     }
 
     fn next(&mut self) -> Result<()> {
-        unimplemented!()
+        dbg!(0);
+        match &mut self.current {
+            Some(current) => {
+                while !self.iters.is_empty() {
+                    let mut heap_min = self.iters.pop().unwrap();
+                    if heap_min.1.key() > current.1.key() {
+                        self.iters.push(heap_min);
+                        break;
+                    } else if heap_min.1.is_valid() {
+                        let _ = heap_min.borrow_mut().1.next();
+                        dbg!(heap_min.1.key(), heap_min.1.value());
+                        self.iters.push(heap_min);
+                    }
+                }
+            }
+            None => (),
+        }
+        dbg!(1);
+        if self.current.is_some() {
+            let mut current = self.current.take().unwrap();
+            if current.1.is_valid() {
+                let _ = current.1.next();
+                self.iters.push(current);
+            }
+        }
+        self.current = self.iters.pop();
+        dbg!(self.current.as_ref().map(|s| s.1.key()));
+        Ok(())
     }
 }
