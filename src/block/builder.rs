@@ -51,6 +51,19 @@ impl BlockBuilder {
         true
     }
 
+    pub fn first_key(&self) -> Vec<u8> {
+        self.first_key.raw_ref().to_vec()
+    }
+
+    pub fn last_key(&self) -> Vec<u8> {
+        if self.data.is_empty() {
+            return Vec::new();
+        }
+        let offset = self.offsets[self.offsets.len() - 2] as usize;
+        let key_len = u16::from_be_bytes([self.data[offset], self.data[offset + 1]]) as usize;
+        self.data[offset + 2..offset + 2 + key_len].to_vec()
+    }
+
     /// Check if there is no key-value pair in the block.
     pub fn is_empty(&self) -> bool {
         self.data.is_empty()

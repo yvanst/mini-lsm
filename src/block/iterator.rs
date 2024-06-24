@@ -56,7 +56,7 @@ impl BlockIterator {
     /// Returns true if the iterator is valid.
     /// Note: You may want to make use of `key`
     pub fn is_valid(&self) -> bool {
-        self.key.is_empty()
+        !self.key.is_empty()
     }
 
     /// Seeks to the first key in the block.
@@ -106,6 +106,8 @@ impl BlockIterator {
         let mut final_offset = 0;
         for (i, offset) in block.offsets.iter().enumerate() {
             if i == block.offsets.len() - 1 {
+                // invalid the iter
+                self.key = KeyVec::new();
                 return;
             }
             let offset = *offset as usize;
@@ -123,9 +125,6 @@ impl BlockIterator {
             block.data[final_offset + 2 + final_key_len],
             block.data[final_offset + 2 + final_key_len + 1],
         ]) as usize;
-
-        let first_key_len = u16::from_be_bytes([block.data[0], block.data[1]]) as usize;
-        let first_key = KeyVec::from_vec(Vec::from(&block.data[2..first_key_len]));
 
         self.key = final_key;
         self.value_range = (
