@@ -151,6 +151,7 @@ where
 {
     for (k, v) in expected {
         assert!(iter.is_valid());
+        dbg!(String::from_utf8_lossy(iter.key()));
         assert_eq!(
             k,
             iter.key(),

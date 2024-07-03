@@ -30,7 +30,7 @@ impl BlockMeta {
     /// You may add extra fields to the buffer,
     /// in order to help keep track of `first_key` when decoding from the same buffer in the future.
     pub fn encode_block_meta(block_meta: &[BlockMeta], buf: &mut Vec<u8>) {
-        let mut count = 0;
+        // let mut count = 0;
         for meta_data in block_meta {
             let mut seg = Vec::new();
             seg.extend((meta_data.offset as u32).to_be_bytes());
@@ -43,7 +43,7 @@ impl BlockMeta {
             seg.extend(last_key_len.to_be_bytes());
             seg.extend(meta_data.last_key.raw_ref());
 
-            count += seg.len();
+            // count += seg.len();
             buf.extend(seg);
         }
     }
@@ -192,35 +192,47 @@ impl SsTable {
         }
     }
 
-    /// Read a block from the disk.
     pub fn read_block(&self, block_idx: usize) -> Result<Arc<Block>> {
-        if block_idx >= self.block_meta.len() {
-            bail!("no such block id in SST")
-        }
-        let left = self.block_meta[block_idx].offset;
-        let right = if block_idx == self.block_meta.len() - 1 {
-            self.block_meta_offset
-        } else {
-            self.block_meta[block_idx + 1].offset
-        };
-        let block = self.file.read(left as u64, (right - left) as u64)?;
-        let block_decode = Block::decode(&block);
-
-        Ok(Arc::new(block_decode))
+        let offset = self.block_meta[block_idx].offset;
+        let offset_end = self
+            .block_meta
+            .get(block_idx + 1)
+            .map_or(self.block_meta_offset, |x| x.offset);
+        let block_data = self
+            .file
+            .read(offset as u64, (offset_end - offset) as u64)?;
+        Ok(Arc::new(Block::decode(&block_data[..])))
     }
+
+    // /// Read a block from the disk.
+    // pub fn read_block(&self, block_idx: usize) -> Result<Arc<Block>> {
+    //     if block_idx >= self.block_meta.len() {
+    //         bail!("no such block id in SST")
+    //     }
+    //     let left = self.block_meta[block_idx].offset;
+    //     let right = if block_idx == self.block_meta.len() - 1 {
+    //         self.block_meta_offset
+    //     } else {
+    //         self.block_meta[block_idx + 1].offset
+    //     };
+    //     let block = self.file.read(left as u64, (right - left) as u64)?;
+    //     let block_decode = Block::decode(&block);
+
+    //     Ok(Arc::new(block_decode))
+    // }
 
     /// Read a block from disk, with block cache. (Day 4)
     pub fn read_block_cached(&self, block_idx: usize) -> Result<Arc<Block>> {
-        if let Some(block_cache) = self.block_cache.as_ref() {
-            let key = (self.id, block_idx);
-            let res = block_cache.try_get_with(key, || self.read_block(block_idx));
-            match res {
-                Ok(block) => Ok(block),
-                Err(_) => bail!("read block error"),
-            }
-        } else {
-            self.read_block(block_idx)
-        }
+        // if let Some(block_cache) = self.block_cache.as_ref() {
+        //     let key = (self.id, block_idx);
+        //     let res = block_cache.try_get_with(key, || self.read_block(block_idx));
+        //     match res {
+        //         Ok(block) => Ok(block),
+        //         Err(_) => bail!("read block error"),
+        //     }
+        // } else {
+        self.read_block(block_idx)
+        // }
     }
 
     /// Find the block that may contain `key`.

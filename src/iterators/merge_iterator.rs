@@ -1,15 +1,9 @@
-#![allow(unused_variables)] // TODO(you): remove this lint after implementing this mod
-#![allow(dead_code)] // TODO(you): remove this lint after implementing this mod
-
-use std::cmp::{self};
+use super::StorageIterator;
+use crate::key::KeySlice;
+use anyhow::Result;
+use std::cmp;
 use std::collections::binary_heap::PeekMut;
 use std::collections::BinaryHeap;
-
-use anyhow::Result;
-
-use crate::key::KeySlice;
-
-use super::StorageIterator;
 
 struct HeapWrapper<I: StorageIterator>(pub usize, pub Box<I>);
 
@@ -48,10 +42,8 @@ pub struct MergeIterator<I: StorageIterator> {
 
 impl<I: StorageIterator> MergeIterator<I> {
     pub fn create(iters: Vec<Box<I>>) -> Self {
-        // dbg!(&iters);
         let mut binary_heap = BinaryHeap::new();
         for (id, iter) in iters.into_iter().enumerate() {
-            dbg!(id);
             if iter.is_valid() {
                 binary_heap.push(HeapWrapper(id, iter))
             }
@@ -84,7 +76,6 @@ impl<I: 'static + for<'a> StorageIterator<KeyType<'a> = KeySlice<'a>>> StorageIt
     }
 
     fn is_valid(&self) -> bool {
-        // !(self.iters.is_empty() & self.current.is_none())
         self.current
             .as_ref()
             .map(|x| x.1.is_valid())
@@ -92,7 +83,6 @@ impl<I: 'static + for<'a> StorageIterator<KeyType<'a> = KeySlice<'a>>> StorageIt
     }
 
     fn next(&mut self) -> Result<()> {
-        //     dbg!(0);
         //     match &mut self.current {
         //         Some(current) => {
         //             while !self.iters.is_empty() {
@@ -109,7 +99,6 @@ impl<I: 'static + for<'a> StorageIterator<KeyType<'a> = KeySlice<'a>>> StorageIt
         //         }
         //         None => (),
         //     }
-        //     dbg!(1);
         //     if self.current.is_some() {
         //         let mut current = self.current.take().unwrap();
         //         if current.1.is_valid() {
@@ -118,7 +107,6 @@ impl<I: 'static + for<'a> StorageIterator<KeyType<'a> = KeySlice<'a>>> StorageIt
         //         }
         //     }
         //     self.current = self.iters.pop();
-        //     dbg!(self.current.as_ref().map(|s| s.1.key()));
         //     Ok(())
         // }
         let current = self.current.as_mut().unwrap();
