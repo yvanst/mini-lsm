@@ -2,9 +2,9 @@ use std::path::Path;
 use std::sync::Arc;
 
 use anyhow::Result;
-use bytes::Bytes;
+use bytes::{BufMut, Bytes};
 
-use super::{BlockMeta, FileObject, SsTable};
+use super::{bloom::Bloom, BlockMeta, FileObject, SsTable};
 use crate::{
     block::BlockBuilder,
     key::{KeyBytes, KeySlice},
@@ -19,6 +19,7 @@ pub struct SsTableBuilder {
     data: Vec<u8>,
     pub(crate) meta: Vec<BlockMeta>,
     block_size: usize,
+    key_hashes: Vec<u32>,
 }
 
 impl SsTableBuilder {
@@ -32,6 +33,7 @@ impl SsTableBuilder {
             data: Vec::new(),
             meta: Vec::new(),
             block_size,
+            key_hashes: Vec::new(),
         }
     }
 
@@ -53,6 +55,7 @@ impl SsTableBuilder {
             let _ = std::mem::replace(&mut self.builder, BlockBuilder::new(self.block_size));
             let _ = self.builder.add(key, value);
         }
+        self.key_hashes.push(farmhash::fingerprint32(key.raw_ref()));
         if self.first_key.is_empty() || self.first_key > self.builder.first_key() {
             self.first_key = self.builder.first_key();
         }
@@ -91,6 +94,14 @@ impl SsTableBuilder {
         BlockMeta::encode_block_meta(&self.meta, &mut data);
         data.extend((extra as u32).to_be_bytes());
 
+        let bloom = Bloom::build_from_key_hashes(
+            &self.key_hashes,
+            Bloom::bloom_bits_per_key(self.key_hashes.len(), 0.01),
+        );
+        let bloom_offset = data.len();
+        bloom.encode(&mut data);
+        data.put_u32(bloom_offset as u32);
+
         let file_object = FileObject::create(path.as_ref(), data)?;
         Ok(SsTable {
             file: file_object,
@@ -100,7 +111,7 @@ impl SsTableBuilder {
             block_cache,
             first_key: KeyBytes::from_bytes(Bytes::copy_from_slice(&self.first_key)),
             last_key: KeyBytes::from_bytes(Bytes::copy_from_slice(&self.last_key)),
-            bloom: None,
+            bloom: Some(bloom),
             max_ts: 0,
         })
     }

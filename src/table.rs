@@ -5,11 +5,10 @@ use self::bloom::Bloom;
 use crate::block::Block;
 use crate::key::{Key, KeyBytes, KeySlice};
 use crate::lsm_storage::BlockCache;
-use anyhow::bail;
 use anyhow::Result;
 pub use builder::SsTableBuilder;
-use bytes::Buf;
 use bytes::Bytes;
+use bytes::{Buf, BufMut};
 pub use iterator::SsTableIterator;
 use std::fs::File;
 use std::path::Path;
@@ -49,7 +48,7 @@ impl BlockMeta {
     }
 
     /// Decode block meta from a buffer.
-    pub fn decode_block_meta(buf: &mut impl Buf) -> Vec<BlockMeta> {
+    pub fn decode_block_meta(mut buf: &[u8]) -> Vec<BlockMeta> {
         let mut block_meta = Vec::new();
         while buf.remaining() > 0 {
             let offset = buf.get_u32();
@@ -138,14 +137,18 @@ impl SsTable {
     /// Open SSTable from a file.
     pub fn open(id: usize, block_cache: Option<Arc<BlockCache>>, file: FileObject) -> Result<Self> {
         let offset_size = std::mem::size_of::<u32>() as u64;
-        let block_meta = file.read(0, file.size() - offset_size)?;
 
-        let block_meta_offset = file.read(file.size() - offset_size, offset_size)?;
+        let raw_bloom_offset = file.read(file.size() - 4, 4)?;
+        let bloom_offset = (&raw_bloom_offset[..]).get_u32() as u64;
+        let raw_bloom = file.read(bloom_offset, file.size() - 4 - bloom_offset)?;
+        let bloom_filter = Bloom::decode(&raw_bloom)?;
+
+        let block_meta_offset = file.read(bloom_offset - offset_size, offset_size)?;
         let block_meta_offset = block_meta_offset[..].try_into()?;
-        let block_meta_offset = u32::from_be_bytes(block_meta_offset) as usize;
+        let block_meta_offset = u32::from_be_bytes(block_meta_offset) as u64;
 
-        let mut buf = &(block_meta[block_meta_offset..]);
-        let block_meta = BlockMeta::decode_block_meta(&mut buf);
+        let buf = file.read(block_meta_offset, bloom_offset - 4 - block_meta_offset)?;
+        let block_meta = BlockMeta::decode_block_meta(&buf[..]);
         let first_key = block_meta
             .iter()
             .map(|meta| &meta.first_key)
@@ -162,12 +165,12 @@ impl SsTable {
         Ok(Self {
             file,
             block_meta,
-            block_meta_offset,
+            block_meta_offset: block_meta_offset as usize,
             id,
             block_cache,
             first_key,
             last_key,
-            bloom: None,
+            bloom: Some(bloom_filter),
             max_ts: 0,
         })
     }

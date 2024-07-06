@@ -4,7 +4,6 @@ use crate::table::SsTableBuilder;
 use crate::wal::Wal;
 use anyhow::Result;
 use bytes::Bytes;
-use clap::builder;
 use crossbeam_skiplist::map::Entry;
 use crossbeam_skiplist::SkipMap;
 use ouroboros::self_referencing;
